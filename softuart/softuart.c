@@ -1,8 +1,11 @@
+#if 0
 #include "ets_sys.h"
 #include "osapi.h"
 #include "gpio.h"
 #include "os_type.h"
 #include "user_interface.h"
+#endif
+#include "otb.h"
 #include "softuart.h"
 
 //array of pointers to instances
@@ -31,7 +34,7 @@ softuart_reg_t softuart_reg[] =
 	//@TODO TODO gpio16 is missing (?include)
 };
 
-uint8_t Softuart_Bitcount(uint32_t x)
+uint8_t ICACHE_FLASH_ATTR Softuart_Bitcount(uint32_t x)
 {
 	uint8_t count;
  
@@ -45,7 +48,7 @@ uint8_t Softuart_Bitcount(uint32_t x)
 	return 0xFF;
 }
 
-uint8_t Softuart_IsGpioValid(uint8_t gpio_id)
+uint8_t ICACHE_FLASH_ATTR Softuart_IsGpioValid(uint8_t gpio_id)
 {
 	if ((gpio_id > 5 && gpio_id < 12) || gpio_id > 15)
 	{
@@ -54,7 +57,7 @@ uint8_t Softuart_IsGpioValid(uint8_t gpio_id)
 	return 1;
 }
 
-void Softuart_SetPinRx(Softuart *s, uint8_t gpio_id)
+void ICACHE_FLASH_ATTR Softuart_SetPinRx(Softuart *s, uint8_t gpio_id)
 { 
 	if(! Softuart_IsGpioValid(gpio_id)) {
 		os_printf("SOFTUART GPIO not valid %d\r\n",gpio_id);
@@ -65,7 +68,7 @@ void Softuart_SetPinRx(Softuart *s, uint8_t gpio_id)
 	}
 }
 
-void Softuart_SetPinTx(Softuart *s, uint8_t gpio_id)
+void ICACHE_FLASH_ATTR Softuart_SetPinTx(Softuart *s, uint8_t gpio_id)
 { 
 	if(! Softuart_IsGpioValid(gpio_id)) {
 		os_printf("SOFTUART GPIO not valid %d\r\n",gpio_id);
@@ -76,7 +79,7 @@ void Softuart_SetPinTx(Softuart *s, uint8_t gpio_id)
 	}
 }
 
-void Softuart_EnableRs485(Softuart *s, uint8_t gpio_id)
+void ICACHE_FLASH_ATTR Softuart_EnableRs485(Softuart *s, uint8_t gpio_id)
 {
 	os_printf("SOFTUART RS485 init\r\n");
 
@@ -97,7 +100,7 @@ void Softuart_EnableRs485(Softuart *s, uint8_t gpio_id)
 	os_printf("SOFTUART RS485 init done\r\n");
 }
 
-void Softuart_Init(Softuart *s, uint32_t baudrate)
+void ICACHE_FLASH_ATTR Softuart_Init(Softuart *s, uint32_t baudrate)
 {
 	//disable rs485
 	s->is_rs485 = 0;
@@ -192,10 +195,11 @@ void Softuart_Init(Softuart *s, uint32_t baudrate)
 	os_printf("SOFTUART INIT DONE\r\n");
 }
 
-void Softuart_Intr_Handler(Softuart *s)
+void ICACHE_FLASH_ATTR Softuart_Intr_Handler(Softuart *s)
 {
 	uint8_t level, gpio_id;
 // clear gpio status. Say ESP8266EX SDK Programming Guide in  5.1.6. GPIO interrupt handler
+    //ets_printf("in interrupt handler\r\n");
 
     uint32_t gpio_status = GPIO_REG_READ(GPIO_STATUS_ADDRESS);
 	gpio_id = Softuart_Bitcount(gpio_status);
@@ -203,6 +207,7 @@ void Softuart_Intr_Handler(Softuart *s)
 	//if interrupt was by an attached rx pin
     if (gpio_id != 0xFF)
     {
+		//ets_printf("Rx pin: %d\r\n", gpio_id);
 		//load instance which has rx pin on interrupt pin attached
 		s = _Softuart_GPIO_Instances[gpio_id];
 
@@ -213,6 +218,7 @@ void Softuart_Intr_Handler(Softuart *s)
 		//check level
 		level = GPIO_INPUT_GET(GPIO_ID_PIN(s->pin_rx.gpio_id));
 		if(!level) {
+			//ets_printf("pin is low\r\n");
 			//pin is low
 			//therefore we have a start bit
 
@@ -277,7 +283,7 @@ void Softuart_Intr_Handler(Softuart *s)
 
 
 // Read data from buffer
-uint8_t Softuart_Read(Softuart *s)
+uint8_t ICACHE_FLASH_ATTR Softuart_Read(Softuart *s)
 {
   // Empty buffer?
   if (s->buffer.receive_buffer_head == s->buffer.receive_buffer_tail)
@@ -290,9 +296,12 @@ uint8_t Softuart_Read(Softuart *s)
 }
 
 // Is data in buffer available?
-BOOL Softuart_Available(Softuart *s)
+BOOL ICACHE_FLASH_ATTR Softuart_Available(Softuart *s)
 {
-	return (s->buffer.receive_buffer_tail + SOFTUART_MAX_RX_BUFF - s->buffer.receive_buffer_head) % SOFTUART_MAX_RX_BUFF;
+	BOOL rc;
+	rc = (s->buffer.receive_buffer_tail + SOFTUART_MAX_RX_BUFF - s->buffer.receive_buffer_head) % SOFTUART_MAX_RX_BUFF;
+	//ets_printf("Available returning: %d\r\n", rc);
+	return rc;
 }
 
 static inline u8 chbit(u8 data, u8 bit)
@@ -308,10 +317,12 @@ static inline u8 chbit(u8 data, u8 bit)
 }
 
 // Function for printing individual characters
-void Softuart_Putchar(Softuart *s, char data)
+void ICACHE_FLASH_ATTR Softuart_Putchar(Softuart *s, char data)
 {
 	unsigned i;
 	unsigned start_time = 0x7FFFFFFF & system_get_time();
+	uint8_t bit;
+	uint8_t parity = 0;
 
 	//if rs485 set tx enable
 	if(s->is_rs485 == 1)
@@ -328,11 +339,22 @@ void Softuart_Putchar(Softuart *s, char data)
 			//If system timer overflow, escape from while loop
 			if ((0x7FFFFFFF & system_get_time()) < start_time){break;}
 		}
-		GPIO_OUTPUT_SET(GPIO_ID_PIN(s->pin_tx.gpio_id), chbit(data,1<<i));
+		bit = chbit(data,1<<i);
+		parity += bit;
+		GPIO_OUTPUT_SET(GPIO_ID_PIN(s->pin_tx.gpio_id), bit);
 	}
 
+	// Parity bit (bit 1 - even parity for mbus, which is 1 if odd)
+	while ((0x7FFFFFFF & system_get_time()) < (start_time + (s->bit_time*(9))))
+	{
+		//If system timer overflow, escape from while loop
+		if ((0x7FFFFFFF & system_get_time()) < start_time){break;}
+	}
+	DEBUG("Data: 0x%02x Parity: 0x%02x Parity bit: %d", data, parity, chbit(parity, 1));
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(s->pin_tx.gpio_id), chbit(parity,1));
+
 	// Stop bit
-	while ((0x7FFFFFFF & system_get_time()) < (start_time + (s->bit_time*9)))
+	while ((0x7FFFFFFF & system_get_time()) < (start_time + (s->bit_time*(10))))
 	{
 		//If system timer overflow, escape from while loop
 		if ((0x7FFFFFFF & system_get_time()) < start_time){break;}
@@ -349,14 +371,14 @@ void Softuart_Putchar(Softuart *s, char data)
 	}
 }
 
-void Softuart_Puts(Softuart *s, const char *c )
+void ICACHE_FLASH_ATTR Softuart_Puts(Softuart *s, const char *c )
 {
 	while ( *c ) {
       	Softuart_Putchar(s,( u8 )*c++);
 	}
 }
 
-uint8_t Softuart_Readline(Softuart *s, char* Buffer, uint8_t MaxLen )
+uint8_t ICACHE_FLASH_ATTR Softuart_Readline(Softuart *s, char* Buffer, uint8_t MaxLen )
 {
 	uint8_t NextChar;
 	uint8_t len = 0;
