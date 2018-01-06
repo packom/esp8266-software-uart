@@ -205,8 +205,9 @@ void ICACHE_FLASH_ATTR Softuart_Intr_Handler(Softuart *s)
 	gpio_id = Softuart_Bitcount(gpio_status);
 
 	//if interrupt was by an attached rx pin
-    if (gpio_id != 0xFF)
-    {
+	if (gpio_id != 0xFF)
+	{
+		ETS_INTR_LOCK();
 		//ets_printf("Rx pin: %d\r\n", gpio_id);
 		//load instance which has rx pin on interrupt pin attached
 		s = _Softuart_GPIO_Instances[gpio_id];
@@ -269,10 +270,12 @@ void ICACHE_FLASH_ATTR Softuart_Intr_Handler(Softuart *s)
 		}
 
 		//clear interrupt
-        GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, gpio_status);
+		GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, gpio_status);
 
-// Reactivate interrupts for GPIO0
-        gpio_pin_intr_state_set(GPIO_ID_PIN(s->pin_rx.gpio_id), 3);
+		// Reactivate interrupts for GPIO
+		gpio_pin_intr_state_set(GPIO_ID_PIN(s->pin_rx.gpio_id), 3);
+		ETS_INTR_UNLOCK();
+
 	} else {
 		//clear interrupt, no matter from which pin
 		//otherwise, this interrupt will be called again forever
