@@ -327,6 +327,8 @@ void ICACHE_FLASH_ATTR Softuart_Putchar(Softuart *s, char data)
 	uint8_t bit;
 	uint8_t parity = 0;
 
+	ETS_INTR_LOCK();
+
 	//if rs485 set tx enable
 	if(s->is_rs485 == 1)
 	{
@@ -335,7 +337,7 @@ void ICACHE_FLASH_ATTR Softuart_Putchar(Softuart *s, char data)
 
 	//Start Bit
 	GPIO_OUTPUT_SET(GPIO_ID_PIN(s->pin_tx.gpio_id), 0);
-	for(i = 0; i <= 8; i ++ )
+	for(i = 0; i < 8; i ++ )
 	{
 		while ((0x7FFFFFFF & system_get_time()) < (start_time + (s->bit_time*(i+1))))
 		{
@@ -372,6 +374,9 @@ void ICACHE_FLASH_ATTR Softuart_Putchar(Softuart *s, char data)
 	{
 		GPIO_OUTPUT_SET(GPIO_ID_PIN(s->pin_rs485_tx_enable), 0);
 	}
+
+	ETS_INTR_UNLOCK();
+
 }
 
 void ICACHE_FLASH_ATTR Softuart_Puts(Softuart *s, const char *c )
