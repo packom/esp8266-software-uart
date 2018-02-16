@@ -33,7 +33,7 @@ typedef struct {
 
 
 BOOL Softuart_Available(Softuart *s);
-void Softuart_Intr_Handler(Softuart *s);
+void Softuart_Intr_Handler(void *arg);
 void Softuart_SetPinRx(Softuart *s, uint8_t gpio_id);
 void Softuart_SetPinTx(Softuart *s, uint8_t gpio_id);
 void Softuart_EnableRs485(Softuart *s, uint8_t gpio_id);

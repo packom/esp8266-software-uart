@@ -1,3 +1,27 @@
+//
+// Modifications from original softuart source code are copyright and licensed as follows:
+//
+
+/*
+ * OTB-IOT - Out of The Box Internet Of Things
+ *
+ * Copyright (C) 2018 Piers Finlayson
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version. 
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of  MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for 
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+
 #if 0
 #include "ets_sys.h"
 #include "osapi.h"
@@ -153,38 +177,8 @@ void ICACHE_FLASH_ATTR Softuart_Init(Softuart *s, uint32_t baudrate)
 
 		//set interrupt related things
 
-		//disable interrupts by GPIO
-		ETS_GPIO_INTR_DISABLE();
+		otb_intr_register(Softuart_Intr_Handler, s, s->pin_rx.gpio_id);
 
-		//attach interrupt handler and a pointer that will be passed around each time
-		ETS_GPIO_INTR_ATTACH(Softuart_Intr_Handler, s);
-
-		//not sure what this does... (quote from example):
-		//    void gpio_register_set(uint32 reg_id, uint32 value);
-		//
-		// From include file
-		//   Set the specified GPIO register to the specified value.
-		//   This is a very general and powerful interface that is not
-		//   expected to be used during normal operation.  It is intended
-		//   mainly for debug, or for unusual requirements.
-		//
-		// All people repeat this mantra but I don't know what it means
-		//
-		gpio_register_set(GPIO_PIN_ADDR(s->pin_rx.gpio_id),
-							   GPIO_PIN_INT_TYPE_SET(GPIO_PIN_INTR_DISABLE)  |
-							   GPIO_PIN_PAD_DRIVER_SET(GPIO_PAD_DRIVER_DISABLE) |
-							   GPIO_PIN_SOURCE_SET(GPIO_AS_PIN_SOURCE));
-		
-		//clear interrupt handler status, basically writing a low to the output
-		GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, BIT(s->pin_rx.gpio_id));
-
-		//enable interrupt for pin on any edge (rise and fall)
-		//@TODO: should work with ANYEDGE (=3), but complie error
-		gpio_pin_intr_state_set(GPIO_ID_PIN(s->pin_rx.gpio_id), 3);
-
-		//globally enable GPIO interrupts
-		ETS_GPIO_INTR_ENABLE();
-	
 		os_printf("SOFTUART RX INIT DONE\r\n");
 	}
 
@@ -195,8 +189,9 @@ void ICACHE_FLASH_ATTR Softuart_Init(Softuart *s, uint32_t baudrate)
 	os_printf("SOFTUART INIT DONE\r\n");
 }
 
-void ICACHE_FLASH_ATTR Softuart_Intr_Handler(Softuart *s)
+void ICACHE_FLASH_ATTR Softuart_Intr_Handler(void *arg)
 {
+	Softuart *s = (Softuart *)arg;
 	uint8_t level, gpio_id;
 // clear gpio status. Say ESP8266EX SDK Programming Guide in  5.1.6. GPIO interrupt handler
     //ets_printf("in interrupt handler\r\n");
@@ -207,7 +202,6 @@ void ICACHE_FLASH_ATTR Softuart_Intr_Handler(Softuart *s)
 	//if interrupt was by an attached rx pin
 	if (gpio_id != 0xFF)
 	{
-		ETS_INTR_LOCK();
 		//ets_printf("Rx pin: %d\r\n", gpio_id);
 		//load instance which has rx pin on interrupt pin attached
 		s = _Softuart_GPIO_Instances[gpio_id];
@@ -274,7 +268,6 @@ void ICACHE_FLASH_ATTR Softuart_Intr_Handler(Softuart *s)
 
 		// Reactivate interrupts for GPIO
 		gpio_pin_intr_state_set(GPIO_ID_PIN(s->pin_rx.gpio_id), 3);
-		ETS_INTR_UNLOCK();
 
 	} else {
 		//clear interrupt, no matter from which pin
