@@ -1,7 +1,10 @@
 #ifndef SOFTUART_H_
 #define SOFTUART_H_
 
-//#include "user_interface.h"
+#include "user_interface.h"
+
+extern void ets_isr_mask(unsigned intr);
+extern void ets_isr_unmask(unsigned intr);
 
 #define SOFTUART_MAX_RX_BUFF 256
 

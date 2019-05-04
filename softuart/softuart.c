@@ -3,9 +3,9 @@
 //
 
 /*
- * OTB-IOT - Out of The Box Internet Of Things
+ * espi-mbus
  *
- * Copyright (C) 2018 Piers Finlayson
+ * Copyright (C) 2019 Piers Finlayson
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -22,14 +22,11 @@
  */
 
 
-#if 0
 #include "ets_sys.h"
 #include "osapi.h"
 #include "gpio.h"
 #include "os_type.h"
 #include "user_interface.h"
-#endif
-#include "otb.h"
 #include "softuart.h"
 
 //array of pointers to instances
@@ -177,7 +174,39 @@ void ICACHE_FLASH_ATTR Softuart_Init(Softuart *s, uint32_t baudrate)
 
 		//set interrupt related things
 
-		otb_intr_register(Softuart_Intr_Handler, s, s->pin_rx.gpio_id);
+		// XXX otb_intr_register(Softuart_Intr_Handler, s, s->pin_rx.gpio_id);
+
+		//disable interrupts by GPIO
+		ETS_GPIO_INTR_DISABLE();
+
+		//attach interrupt handler and a pointer that will be passed around each time
+		ETS_GPIO_INTR_ATTACH(Softuart_Intr_Handler, s);
+
+		//not sure what this does... (quote from example):
+		//    void gpio_register_set(uint32 reg_id, uint32 value);
+		//
+		// From include file
+		//   Set the specified GPIO register to the specified value.
+		//   This is a very general and powerful interface that is not
+		//   expected to be used during normal operation.  It is intended
+		//   mainly for debug, or for unusual requirements.
+		//
+		// All people repeat this mantra but I don't know what it means
+		//
+		gpio_register_set(GPIO_PIN_ADDR(s->pin_rx.gpio_id),
+							   GPIO_PIN_INT_TYPE_SET(GPIO_PIN_INTR_DISABLE)  |
+							   GPIO_PIN_PAD_DRIVER_SET(GPIO_PAD_DRIVER_DISABLE) |
+							   GPIO_PIN_SOURCE_SET(GPIO_AS_PIN_SOURCE));
+		
+		//clear interrupt handler status, basically writing a low to the output
+		GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, BIT(s->pin_rx.gpio_id));
+
+		//enable interrupt for pin on any edge (rise and fall)
+		//@TODO: should work with ANYEDGE (=3), but complie error
+		gpio_pin_intr_state_set(GPIO_ID_PIN(s->pin_rx.gpio_id), 3);
+
+		//globally enable GPIO interrupts
+		ETS_GPIO_INTR_ENABLE();		
 
 		os_printf("SOFTUART RX INIT DONE\r\n");
 	}
@@ -348,7 +377,7 @@ void ICACHE_FLASH_ATTR Softuart_Putchar(Softuart *s, char data)
 		//If system timer overflow, escape from while loop
 		if ((0x7FFFFFFF & system_get_time()) < start_time){break;}
 	}
-	DEBUG("Data: 0x%02x Parity: 0x%02x Parity bit: %d", data, parity, chbit(parity, 1));
+	//DEBUG("Data: 0x%02x Parity: 0x%02x Parity bit: %d", data, parity, chbit(parity, 1));
 	GPIO_OUTPUT_SET(GPIO_ID_PIN(s->pin_tx.gpio_id), chbit(parity,1));
 
 	// Stop bit
